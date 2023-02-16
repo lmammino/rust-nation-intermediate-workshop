@@ -4,6 +4,7 @@ use std::time::Duration;
 
 type Task = Box<dyn FnOnce() + Send + 'static>;
 
+// TODO: refactor this using channels
 struct ThreadPool {
     tasks: Arc<Mutex<Vec<Task>>>,
     threads: Vec<thread::JoinHandle<()>>,
