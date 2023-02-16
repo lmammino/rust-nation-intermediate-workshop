@@ -8,18 +8,18 @@ type Task = Box<dyn FnOnce() + Send + 'static>;
 struct ThreadPool {
     tasks: Arc<Mutex<Vec<Task>>>,
     threads: Vec<thread::JoinHandle<()>>,
-    should_stop: Arc<Mutex<bool>>,
+    stopping: Arc<Mutex<bool>>,
 }
 
 impl ThreadPool {
     fn new(number_of_threads: u8) -> Self {
         let tasks: Arc<Mutex<Vec<Task>>> = Arc::new(Mutex::new(Vec::new()));
         let mut threads = Vec::new();
-        let should_stop: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
+        let stopping: Arc<Mutex<bool>> = Arc::new(Mutex::new(false));
 
         for _ in 0..number_of_threads {
             let t = tasks.clone();
-            let ss = should_stop.clone();
+            let ss = stopping.clone();
             let thread = thread::spawn(move || loop {
                 let mut tasks = t.lock().unwrap();
                 if let Some(task) = tasks.pop() {
@@ -28,13 +28,13 @@ impl ThreadPool {
                     task();
                 } else {
                     drop(tasks);
-                    let should_stop = ss.lock().unwrap();
-                    if *should_stop {
-                        drop(should_stop);
+                    let stopping = ss.lock().unwrap();
+                    if *stopping {
+                        drop(stopping);
                         println!("{:?}: STOPPING", thread::current().id());
                         break;
                     } else {
-                        drop(should_stop);
+                        drop(stopping);
                         println!("{:?}: BORING: nothing to do", thread::current().id());
                         thread::sleep(Duration::from_secs(1));
                     }
@@ -46,7 +46,7 @@ impl ThreadPool {
         Self {
             tasks,
             threads,
-            should_stop,
+            stopping,
         }
     }
 
@@ -58,10 +58,10 @@ impl ThreadPool {
 
     fn stop(&mut self) {
         println!("STOPPING EVERYTHING");
-        let should_stop = self.should_stop.clone();
-        let mut should_stop = should_stop.lock().unwrap();
-        *should_stop = true;
-        drop(should_stop);
+        let stopping = self.stopping.clone();
+        let mut stopping = stopping.lock().unwrap();
+        *stopping = true;
+        drop(stopping);
         for thread in self.threads.drain(..) {
             thread.join().unwrap();
         }
